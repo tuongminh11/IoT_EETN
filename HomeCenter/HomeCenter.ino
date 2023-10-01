@@ -114,7 +114,15 @@ void reconnect()
 void setup()
 {
   Serial.begin(9600);
+
+  //start-block2
+  IPAddress _ip = IPAddress(192, 168, 1, 116);
+  IPAddress _gw = IPAddress(192, 168, 1, 1);
+  IPAddress _sn = IPAddress(255, 255, 255, 0);
+  //end-block2
+  
   WiFiManager wm;
+  wm.setSTAStaticIPConfig(_ip, _gw, _sn);
   bool res = wm.autoConnect("AutoConnectAP","password");
   if(!res) {
         Serial.println("Failed to connect");

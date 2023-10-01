@@ -69,7 +69,7 @@ void loop() {
 //  Serial.println(humi);
 //  int temprature = coap.put(IPAddress(192, 168, 1, 5), 5683, "sensor", (char *) &temp, sizeof(temp));
 //  int humidity = coap.put(IPAddress(192, 168, 1, 5), 5683, "sensor", (char *) &humi, sizeof(humi));
-  int rq = coap.send(IPAddress(192, 168, 1, 8), 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0,(uint8_t *) &a, sizeof(a));
+  int rq = coap.send(IPAddress(192, 168, 1, 116), 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0,(uint8_t *) &a, sizeof(a));
   delay(period * 1000);
   coap.loop();
 }

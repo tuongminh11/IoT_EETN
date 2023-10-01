@@ -71,7 +71,7 @@ void setup() {
   char a[data.length() + 1];
   data.toCharArray(a, data.length() + 1);
   Serial.println(data);
-  int rq = coap.send(IPAddress(192, 168, 1, 8), 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0,(uint8_t *) &a, sizeof(a));
+  int rq = coap.send(IPAddress(192, 168, 1, 116), 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0,(uint8_t *) &a, sizeof(a));
 }
 
 void loop() {
