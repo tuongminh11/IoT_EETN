@@ -1,12 +1,10 @@
-#include <WiFi.h>
+#include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include <coap-simple.h>
 #include <ArduinoJson.h>
 #include <String.h>
 #include <PubSubClient.h>
 
-const char *ssid = "504 -2.4G";
-const char *password = "minhminh";
 const char *mqtt_server = "192.168.1.4";
 
 // CoAP client response callback
@@ -116,16 +114,15 @@ void reconnect()
 void setup()
 {
   Serial.begin(9600);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  WiFiManager wm;
+  bool res = wm.autoConnect("AutoConnectAP","password");
+  if(!res) {
+        Serial.println("Failed to connect");
+    } 
+    else {
+        Serial.println("connected...yeey :)");
+    }
+
 
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);

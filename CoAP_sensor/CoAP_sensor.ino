@@ -1,13 +1,9 @@
-#include <ESP8266WiFi.h>
+#include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include <coap-simple.h>
 #include <ArduinoJson.h>
 
 uint8_t period = 1;
-
-const char* ssid = "504 -2.4G";
-const char* password = "minhminh";
-
 
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port);
@@ -33,15 +29,15 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
 void setup() {
   Serial.begin(9600);
 
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  WiFiManager wm;
+  bool res = wm.autoConnect("AutoConnectAP","password");
+  if(!res) {
+        Serial.println("Failed to connect");
+    } 
+    else {
+        Serial.println("connected...yeey :)");
+    }
+
 
   coap.server(callback_periodSensor, "device");
   // client response callback.

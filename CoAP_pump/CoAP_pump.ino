@@ -1,11 +1,8 @@
-#include <ESP8266WiFi.h>
+#include <WiFiManager.h>
 #include <WiFiUdp.h>
 #include <coap-simple.h>
 
 #define PUMP 2
-
-const char* ssid = "504 -2.4G";
-const char* password = "minhminh";
 
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_control(CoapPacket &packet, IPAddress ip, int port);
@@ -19,9 +16,6 @@ void callback_control(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p[packet.payloadlen + 1];
   memcpy(p, packet.payload, packet.payloadlen);
   p[packet.payloadlen] = NULL;
-  for (int i = 0; i < packet.payloadlen+1; i++) {
-    Serial.print((char)p[i]);
-  }
   String message= String((char *)&p);
   Serial.println(message);
   if (message.equals("0"))
@@ -51,15 +45,15 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
 void setup() {
   Serial.begin(9600);
 
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  WiFiManager wm;
+  bool res = wm.autoConnect("AutoConnectAP","password");
+  if(!res) {
+        Serial.println("Failed to connect");
+    } 
+    else {
+        Serial.println("connected...yeey :)");
+    }
+
 
   pinMode(PUMP, OUTPUT);
   digitalWrite(PUMP, HIGH);
