@@ -12,7 +12,7 @@
         > "0"             : device's protocol ( 0 for CoAP, 1 for MQTT)
         >
         JSON cache in Home center like this:  
-        ```
+        ```json
         {
             "garden_sensor":{
                 "IP":"192.168.1.19",
@@ -56,7 +56,7 @@
         * Structure data :   
         **Int** : 0 or 1 to control  
         **Float** : to change period in sensor device
-            ```
+            ```json
             //data from Platform
             {"method":"$device's name", "params": $data type Int or Float}
             ```
