@@ -2,20 +2,39 @@
 #include <WiFiUdp.h>
 #include <coap-simple.h>
 #include <ArduinoJson.h>
+#include "AsyncUDP.h"
 
-uint8_t period = 1;
+#define TRIGGER_PIN 0
+
+uint8_t period = 2;
 
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port);
-WiFiUDP udp;
-Coap coap(udp);
 
-void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {  
-  uint8_t p;
-  memcpy(&p, packet.payload, packet.payloadlen);
-  period = p - '0';
-  Serial.println(p);
-  coap.sendResponse(ip, port, packet.messageid, "change period successfully");
+WiFiManager wm;
+WiFiUDP Udp;
+Coap coap(Udp);
+AsyncUDP udp;
+
+IPAddress centralIP;
+bool serverConnect = false;
+
+const String cmd = "BUSTER CALL";
+unsigned long lastLoop = 0;
+uint8_t count = 0;
+
+
+void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
+  uint8_t p[packet.payloadlen + 1];
+  memcpy(p, packet.payload, packet.payloadlen);
+  p[packet.payloadlen] = NULL;
+  String message = String((char *)&p);
+  Serial.println(message);
+  if (atof((char *)&p) > 0) {
+    period = atof((char *)&p);
+    coap.sendResponse(ip, port, packet.messageid, "change period successfully");
+  }
+  else coap.sendResponse(ip, port, packet.messageid, "invalid period");
 }
 
 // CoAP client response callback
@@ -24,52 +43,126 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p;
   memcpy(&p, packet.payload, packet.payloadlen);
   Serial.println(p);
+  serverConnect = true;
+}
+
+void getIPHomeCenter() {
+  Serial.println("Connect to Home Center");
+  udp.broadcast("garden_sensor/0");
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  pinMode(TRIGGER_PIN, INPUT_PULLUP);
 
-  WiFiManager wm;
-  bool res = wm.autoConnect("AutoConnectAP","password");
-  if(!res) {
-        Serial.println("Failed to connect");
-    } 
-    else {
-        Serial.println("connected...yeey :)");
-    }
+  bool res = wm.autoConnect("TM-NgocHung CoAP sensor", "12345678");
+  if (!res) {
+    Serial.println("Failed to connect");
+  } else {
+    Serial.println("connected...yeey :)");
+  }
 
-
-  coap.server(callback_periodSensor, "device");
+  if (udp.listen(1234)) {
+    Serial.print("UDP Listening on IP: ");
+    Serial.println(WiFi.localIP());
+    udp.onPacket([](AsyncUDPPacket packet) {
+      Serial.print("UDP Packet Type: ");
+      Serial.print(packet.isBroadcast() ? "Broadcast" : packet.isMulticast() ? "Multicast"
+                                                                             : "Unicast");
+      Serial.print(", From: ");
+      Serial.print(packet.remoteIP());
+      Serial.print(":");
+      Serial.print(packet.remotePort());
+      Serial.print(", To: ");
+      Serial.print(packet.localIP());
+      Serial.print(":");
+      Serial.print(packet.localPort());
+      Serial.print(", Length: ");
+      Serial.print(packet.length());
+      Serial.print(", Data: ");
+      Serial.write(packet.data(), packet.length());
+      Serial.println();
+      if (!packet.isBroadcast() && !packet.isMulticast()) {
+        String a = String((char *)packet.data());
+        if (a.equals(cmd)) {
+          centralIP = packet.remoteIP();
+          serverConnect = true;
+          Serial.println("connected to server");
+          Serial.println(centralIP);
+          udp.close();
+        }
+      }
+    });
+  }
+  coap.server(callback_periodSensor, "control");
   // client response callback.
   // this endpoint is single callback.
-  Serial.println("Setup Response Callback");
+
   coap.response(callback_response);
 
   // start coap server/client
   coap.start();
 }
 
+void checkButton(){
+  // check for button press
+  if ( digitalRead(TRIGGER_PIN) == LOW ) {
+    // poor mans debounce/press-hold, code not ideal for production
+    delay(50);
+    if( digitalRead(TRIGGER_PIN) == LOW ){
+      Serial.println("Button Pressed");
+      // still holding button for 3000 ms, reset settings, code not ideaa for production
+      delay(3000); // reset delay hold
+      if( digitalRead(TRIGGER_PIN) == LOW ){
+        Serial.println("Button Held");
+        Serial.println("Erasing Config, restarting");
+        wm.resetSettings();
+        ESP.restart();
+      }
+      
+      // start portal w delay
+      Serial.println("Starting config portal");
+      wm.setConfigPortalTimeout(120);
+      
+      if (!wm.startConfigPortal("OnDemandAP","password")) {
+        Serial.println("failed to connect or hit timeout");
+        delay(3000);
+        // ESP.restart();
+      } else {
+        //if you get here you have connected to the WiFi
+        Serial.println("connected...yeey :)");
+      }
+    }
+  }
+}
+
 void loop() {
-  DynamicJsonDocument doc(100);
-  
-  uint8_t temp = random(0, 50);
-  uint8_t humi = random(0, 100);
-  doc["temprature"]=temp;
-  doc["humidity"]=humi;
-  doc["name"]="home_sensor";
-  Serial.print("Send Request: ");
-  serializeJson(doc, Serial);
-  Serial.println();
-  String data;
-  serializeJson(doc, data);
-  char a[data.length() + 1];
-  data.toCharArray(a, data.length() + 1);
-  Serial.println(data);
-//  Serial.print(" ");
-//  Serial.println(humi);
-//  int temprature = coap.put(IPAddress(192, 168, 1, 5), 5683, "sensor", (char *) &temp, sizeof(temp));
-//  int humidity = coap.put(IPAddress(192, 168, 1, 5), 5683, "sensor", (char *) &humi, sizeof(humi));
-  int rq = coap.send(IPAddress(192, 168, 1, 116), 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0,(uint8_t *) &a, sizeof(a));
-  delay(period * 1000);
+  if (millis() - lastLoop >= period * 1000) {
+    if (!serverConnect) {
+      getIPHomeCenter();
+    } else {
+      DynamicJsonDocument doc(100);
+      uint8_t temp = random(0, 50);
+      uint8_t humi = random(0, 100);
+      doc["garden_sensor"]["period"] = period;
+      doc["garden_sensor"]["temprature"] = temp;
+      doc["garden_sensor"]["humidity"] = humi;
+      Serial.print("Send : ");
+      String data;
+      serializeJson(doc, data);
+      char a[data.length() + 1];
+      data.toCharArray(a, data.length() + 1);
+      Serial.println(data);
+      int rq = coap.send(centralIP, 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0, (uint8_t *)&a, sizeof(a));
+      count = count + 1;
+      count = count % 3;
+      if (count >= 2) {
+        serverConnect = false;
+      }
+    }
+    lastLoop = millis();
+  }
   coap.loop();
+  checkButton();
+
 }
