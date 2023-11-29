@@ -10,6 +10,9 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_control(CoapPacket &packet, IPAddress ip, int port);
 
 WiFiManager wm;
+WiFiManagerParameter set_device_name("nameTag", "Device name", "", 20);
+String nameTag;
+
 WiFiUDP Udp;
 Coap coap(Udp);
 AsyncUDP udp;
@@ -57,12 +60,17 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
 
 void getIPHomeCenter() {
   Serial.println("Connect to Home Center");
-  udp.broadcast("garden_pump/0");
+  String msg = nameTag + "/0";
+  udp.broadcast(msg.c_str());
 }
 
 void setup() {
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
+  wm.setConfigPortalBlocking(false);
+  wm.addParameter(&set_device_name);
+  wm.setConfigPortalBlocking(false);
+  wm.setSaveParamsCallback(saveParamsCallback);
 
   bool res = wm.autoConnect("TM-NgocHung CoAP pump", "12345678");
   if (!res) {
@@ -117,27 +125,27 @@ void setup() {
   coap.start();
 }
 
-void checkButton(){
+void checkButton() {
   // check for button press
-  if ( digitalRead(TRIGGER_PIN) == LOW ) {
+  if (digitalRead(TRIGGER_PIN) == LOW) {
     // poor mans debounce/press-hold, code not ideal for production
     delay(50);
-    if( digitalRead(TRIGGER_PIN) == LOW ){
+    if (digitalRead(TRIGGER_PIN) == LOW) {
       Serial.println("Button Pressed");
       // still holding button for 3000 ms, reset settings, code not ideaa for production
-      delay(3000); // reset delay hold
-      if( digitalRead(TRIGGER_PIN) == LOW ){
+      delay(3000);  // reset delay hold
+      if (digitalRead(TRIGGER_PIN) == LOW) {
         Serial.println("Button Held");
         Serial.println("Erasing Config, restarting");
         wm.resetSettings();
         ESP.restart();
       }
-      
+
       // start portal w delay
       Serial.println("Starting config portal");
       wm.setConfigPortalTimeout(120);
-      
-      if (!wm.startConfigPortal("OnDemandAP","password")) {
+
+      if (!wm.startConfigPortal("OnDemandAP", "password")) {
         Serial.println("failed to connect or hit timeout");
         delay(3000);
         // ESP.restart();
@@ -150,6 +158,8 @@ void checkButton(){
 }
 
 void loop() {
+  wm.process();
+
   if (!serverConnect) {
     if (millis() - lastLoop >= 2000) {
       getIPHomeCenter();
@@ -159,5 +169,12 @@ void loop() {
     coap.loop();
   }
   checkButton();
+}
 
+void saveParamsCallback() {
+  Serial.println("Get Params:");
+  Serial.print(set_device_name.getID());
+  Serial.print(" : ");
+  Serial.println(set_device_name.getValue());
+  nameTag = String(set_device_name.getValue());
 }

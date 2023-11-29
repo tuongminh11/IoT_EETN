@@ -4,7 +4,7 @@
 #include <ArduinoJson.h>
 #include "AsyncUDP.h"
 
-#define TRIGGER_PIN 0
+#define TRIGGER_PIN 0  //pin reset config
 
 uint8_t period = 2;
 
@@ -12,6 +12,9 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port);
 
 WiFiManager wm;
+WiFiManagerParameter set_device_name("nameTag", "Device name", "", 20);
+String nameTag;
+
 WiFiUDP Udp;
 Coap coap(Udp);
 AsyncUDP udp;
@@ -23,7 +26,6 @@ const String cmd = "BUSTER CALL";
 unsigned long lastLoop = 0;
 uint8_t count = 0;
 
-
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p[packet.payloadlen + 1];
   memcpy(p, packet.payload, packet.payloadlen);
@@ -33,8 +35,7 @@ void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
   if (atof((char *)&p) > 0) {
     period = atof((char *)&p);
     coap.sendResponse(ip, port, packet.messageid, "change period successfully");
-  }
-  else coap.sendResponse(ip, port, packet.messageid, "invalid period");
+  } else coap.sendResponse(ip, port, packet.messageid, "invalid period");
 }
 
 // CoAP client response callback
@@ -48,12 +49,18 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
 
 void getIPHomeCenter() {
   Serial.println("Connect to Home Center");
-  udp.broadcast("garden_sensor/0");
+  String msg = nameTag + "/0";
+  udp.broadcast(msg.c_str());
 }
 
 void setup() {
+  WiFi.mode(WIFI_STA);
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
+  wm.setConfigPortalBlocking(false);
+  wm.addParameter(&set_device_name);
+  wm.setConfigPortalBlocking(false);
+  wm.setSaveParamsCallback(saveParamsCallback);
 
   bool res = wm.autoConnect("TM-NgocHung CoAP sensor", "12345678");
   if (!res) {
@@ -104,27 +111,27 @@ void setup() {
   coap.start();
 }
 
-void checkButton(){
+void checkButton() {
   // check for button press
-  if ( digitalRead(TRIGGER_PIN) == LOW ) {
+  if (digitalRead(TRIGGER_PIN) == LOW) {
     // poor mans debounce/press-hold, code not ideal for production
     delay(50);
-    if( digitalRead(TRIGGER_PIN) == LOW ){
+    if (digitalRead(TRIGGER_PIN) == LOW) {
       Serial.println("Button Pressed");
       // still holding button for 3000 ms, reset settings, code not ideaa for production
-      delay(3000); // reset delay hold
-      if( digitalRead(TRIGGER_PIN) == LOW ){
+      delay(3000);  // reset delay hold
+      if (digitalRead(TRIGGER_PIN) == LOW) {
         Serial.println("Button Held");
         Serial.println("Erasing Config, restarting");
         wm.resetSettings();
         ESP.restart();
       }
-      
+
       // start portal w delay
       Serial.println("Starting config portal");
       wm.setConfigPortalTimeout(120);
-      
-      if (!wm.startConfigPortal("OnDemandAP","password")) {
+
+      if (!wm.startConfigPortal("OnDemandAP", "password")) {
         Serial.println("failed to connect or hit timeout");
         delay(3000);
         // ESP.restart();
@@ -137,6 +144,7 @@ void checkButton(){
 }
 
 void loop() {
+  wm.process();
   if (millis() - lastLoop >= period * 1000) {
     if (!serverConnect) {
       getIPHomeCenter();
@@ -144,9 +152,9 @@ void loop() {
       DynamicJsonDocument doc(100);
       uint8_t temp = random(0, 50);
       uint8_t humi = random(0, 100);
-      doc["garden_sensor"]["period"] = period;
-      doc["garden_sensor"]["temprature"] = temp;
-      doc["garden_sensor"]["humidity"] = humi;
+      doc[nameTag]["period"] = period;
+      doc[nameTag]["temprature"] = temp;
+      doc[nameTag]["humidity"] = humi;
       Serial.print("Send : ");
       String data;
       serializeJson(doc, data);
@@ -164,5 +172,12 @@ void loop() {
   }
   coap.loop();
   checkButton();
+}
 
+void saveParamsCallback() {
+  Serial.println("Get Params:");
+  Serial.print(set_device_name.getID());
+  Serial.print(" : ");
+  Serial.println(set_device_name.getValue());
+  nameTag = String(set_device_name.getValue());
 }
