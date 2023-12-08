@@ -10,8 +10,7 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_control(CoapPacket &packet, IPAddress ip, int port);
 
 WiFiManager wm;
-WiFiManagerParameter set_device_name("nameTag", "Device name", "", 20);
-String nameTag;
+String nameTag = "garden_pump";
 
 WiFiUDP Udp;
 Coap coap(Udp);
@@ -67,10 +66,6 @@ void getIPHomeCenter() {
 void setup() {
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
-  wm.setConfigPortalBlocking(false);
-  wm.addParameter(&set_device_name);
-  wm.setConfigPortalBlocking(false);
-  wm.setSaveParamsCallback(saveParamsCallback);
 
   bool res = wm.autoConnect("TM-NgocHung CoAP pump", "12345678");
   if (!res) {
@@ -158,8 +153,6 @@ void checkButton() {
 }
 
 void loop() {
-  wm.process();
-
   if (!serverConnect) {
     if (millis() - lastLoop >= 2000) {
       getIPHomeCenter();
@@ -169,12 +162,4 @@ void loop() {
     coap.loop();
   }
   checkButton();
-}
-
-void saveParamsCallback() {
-  Serial.println("Get Params:");
-  Serial.print(set_device_name.getID());
-  Serial.print(" : ");
-  Serial.println(set_device_name.getValue());
-  nameTag = String(set_device_name.getValue());
 }

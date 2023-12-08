@@ -2,7 +2,7 @@
 #include <WiFiUdp.h>
 #include <coap-simple.h>
 #include <ArduinoJson.h>
-#include "AsyncUDP.h"
+#include "ESPAsyncUDP.h"
 
 #define TRIGGER_PIN 0  //pin reset config
 
@@ -11,9 +11,8 @@ uint8_t period = 2;
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port);
 
-WiFiManager wm;
-WiFiManagerParameter set_device_name("nameTag", "Device name", "", 20);
-String nameTag;
+WiFiManager wm; 
+String nameTag = "garden_sensor";
 
 WiFiUDP Udp;
 Coap coap(Udp);
@@ -57,10 +56,6 @@ void setup() {
   WiFi.mode(WIFI_STA);
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
-  wm.setConfigPortalBlocking(false);
-  wm.addParameter(&set_device_name);
-  wm.setConfigPortalBlocking(false);
-  wm.setSaveParamsCallback(saveParamsCallback);
 
   bool res = wm.autoConnect("TM-NgocHung CoAP sensor", "12345678");
   if (!res) {
@@ -101,6 +96,7 @@ void setup() {
       }
     });
   }
+   
   coap.server(callback_periodSensor, "control");
   // client response callback.
   // this endpoint is single callback.
@@ -144,7 +140,6 @@ void checkButton() {
 }
 
 void loop() {
-  wm.process();
   if (millis() - lastLoop >= period * 1000) {
     if (!serverConnect) {
       getIPHomeCenter();
@@ -172,12 +167,4 @@ void loop() {
   }
   coap.loop();
   checkButton();
-}
-
-void saveParamsCallback() {
-  Serial.println("Get Params:");
-  Serial.print(set_device_name.getID());
-  Serial.print(" : ");
-  Serial.println(set_device_name.getValue());
-  nameTag = String(set_device_name.getValue());
 }
