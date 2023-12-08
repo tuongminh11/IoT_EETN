@@ -14,28 +14,6 @@ WiFiManager wf;
 String nameTag;
 uint8_t period = 3;
 WiFiManagerParameter set_device_name("nameTag", "Device name", "", 30);
-void setup_wifi() {
-  delay(10);
-  // We start by connecting to a WiFi network
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  randomSeed(micros());
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-}
 
 void reconnect() {
   // Loop until we're reconnected
@@ -99,12 +77,44 @@ void setup() {
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback_period);
 }
+void checkButton() {
+  // check for button press
+  if (digitalRead(TRIGGER_PIN) == LOW) {
+    // poor mans debounce/press-hold, code not ideal for production
+    delay(50);
+    if (digitalRead(TRIGGER_PIN) == LOW) {
+      Serial.println("Button Pressed");
+      // still holding button for 3000 ms, reset settings, code not ideaa for production
+      delay(3000);  // reset delay hold
+      if (digitalRead(TRIGGER_PIN) == LOW) {
+        Serial.println("Button Held");
+        Serial.println("Erasing Config, restarting");
+        wf.resetSettings();
+        ESP.restart();
+      }
+
+      // start portal w delay
+      Serial.println("Starting config portal");
+      wf.setConfigPortalTimeout(120);
+
+      if (!wf.startConfigPortal("OnDemandAP", "password")) {
+        Serial.println("failed to connect or hit timeout");
+        delay(3000);
+        ESP.restart();
+      } else {
+        //if you get here you have connected to the WiFi
+        Serial.println("connected...yeey :)");
+      }
+    }
+  }
+}
 
 void loop() {
   if (!client.connected()) {
     reconnect();
   }
   client.loop();
+  checkButton();
   String state="";
   if(digitalRead(Led_State)==LOW)
   {
