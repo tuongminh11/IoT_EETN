@@ -80,7 +80,7 @@ void setup() {
     udp.onPacket([](AsyncUDPPacket packet) {
       Serial.print("UDP Packet Type: ");
       Serial.print(packet.isBroadcast() ? "Broadcast" : packet.isMulticast() ? "Multicast"
-                                                                             : "Unicast");
+                   : "Unicast");
       Serial.print(", From: ");
       Serial.print(packet.remoteIP());
       Serial.print(":");
@@ -95,7 +95,9 @@ void setup() {
       Serial.write(packet.data(), packet.length());
       Serial.println();
       if (!packet.isBroadcast() && !packet.isMulticast()) {
-        String a = String((char *)packet.data());
+        char p[11];
+        memcpy(&p, (char *)packet.data(), 11);
+        String a = String(p);
         if (a.equals(cmd)) {
           centralIP = packet.remoteIP();
           serverConnect = true;

@@ -5,13 +5,19 @@
 #include "ESPAsyncUDP.h"
 
 #define TRIGGER_PIN 0  //pin reset config
+#define CONTEXT_PIN 2
+
+bool context = false;
+bool lastContext = false;
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
 
 uint8_t period = 2;
 
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port);
 
-WiFiManager wm; 
+WiFiManager wm;
 String nameTag = "garden_sensor";
 
 WiFiUDP Udp;
@@ -23,7 +29,6 @@ bool serverConnect = false;
 
 const String cmd = "BUSTER CALL";
 unsigned long lastLoop = 0;
-uint8_t count = 0;
 
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p[packet.payloadlen + 1];
@@ -56,6 +61,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
+  pinMode(CONTEXT_PIN, INPUT_PULLUP);
 
   bool res = wm.autoConnect("TM-NgocHung CoAP sensor", "12345678");
   if (!res) {
@@ -70,7 +76,7 @@ void setup() {
     udp.onPacket([](AsyncUDPPacket packet) {
       Serial.print("UDP Packet Type: ");
       Serial.print(packet.isBroadcast() ? "Broadcast" : packet.isMulticast() ? "Multicast"
-                                                                             : "Unicast");
+                   : "Unicast");
       Serial.print(", From: ");
       Serial.print(packet.remoteIP());
       Serial.print(":");
@@ -84,19 +90,27 @@ void setup() {
       Serial.print(", Data: ");
       Serial.write(packet.data(), packet.length());
       Serial.println();
-      if (!packet.isBroadcast() && !packet.isMulticast()) {
-        String a = String((char *)packet.data());
-        if (a.equals(cmd)) {
-          centralIP = packet.remoteIP();
-          serverConnect = true;
-          Serial.println("connected to server");
-          Serial.println(centralIP);
-          udp.close();
+      if (!packet.isBroadcast()) {
+        if (!packet.isMulticast()) {
+          char p[11];
+          memcpy(&p, (char *)packet.data(), 11);
+          String a = String(p);
+          if (a.equals(cmd)) {
+            centralIP = packet.remoteIP();
+            serverConnect = true;
+            Serial.println("connected to server");
+            Serial.println(centralIP);
+            udp.close();
+          }
+          else {
+            Serial.println(String((char *)packet.data()));
+            Serial.println("code not match");
+          }
         }
       }
     });
   }
-   
+
   coap.server(callback_periodSensor, "control");
   // client response callback.
   // this endpoint is single callback.
@@ -140,13 +154,24 @@ void checkButton() {
 }
 
 void loop() {
+  bool reading = digitalRead(CONTEXT_PIN);
+  if (!reading) {
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (!reading) {
+        if(lastContext != reading) context = !context;
+      }
+    }
+  }
+  lastContext = reading;
   if (millis() - lastLoop >= period * 1000) {
     if (!serverConnect) {
       getIPHomeCenter();
     } else {
+      serverConnect = false;
       DynamicJsonDocument doc(100);
-      uint8_t temp = random(0, 50);
+      uint8_t temp = random(10, 40);
       uint8_t humi = random(0, 100);
+      if (context) temp = random(60, 100);
       doc[nameTag]["period"] = period;
       doc[nameTag]["temprature"] = temp;
       doc[nameTag]["humidity"] = humi;
@@ -157,11 +182,6 @@ void loop() {
       data.toCharArray(a, data.length() + 1);
       Serial.println(data);
       int rq = coap.send(centralIP, 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0, (uint8_t *)&a, sizeof(a));
-      count = count + 1;
-      count = count % 3;
-      if (count >= 2) {
-        serverConnect = false;
-      }
     }
     lastLoop = millis();
   }
