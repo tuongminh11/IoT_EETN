@@ -223,7 +223,7 @@ void setup() {
   //start local MQTT Broker
   mqtt.subscribe("#", [](const char *topic, const char *payload) {+
     //handle Local MQTT
-    Serial.printf("Received message in topic '%s': %s\n", topic, payload);
+    Serial.printf("MQTT locol '%s': %s\n", topic, payload);
     String a = String(payload);
     if (automation) {
       IPAddress ipDevice;

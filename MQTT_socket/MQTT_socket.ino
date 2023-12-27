@@ -2,21 +2,21 @@
 #include <WiFiManager.h>
 #include <PubSubClient.h>
 #include <ESPAsyncUDP.h>
-#define TRIGGER_PIN 23
+
+#define TRIGGER_PIN 0
 #define Led_Pin 2
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 WiFiManager wf;
-String nameTag = "home_sensor";
+String nameTag = "home_socket";
 
 AsyncUDP udp;
 IPAddress centralIP;
 bool serverConnect = false;
 const String cmd = "BUSTER CALL";
-uint8_t period = 2;
 
-// Callback + change period
+// Callback
 void callback_period(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -36,16 +36,6 @@ void callback_period(char* topic, byte* payload, unsigned int length) {
   {
     digitalWrite(Led_Pin,LOW);
   }
-  // Update periodValue with received value
-  if (strcmp(topic, "ProjectIoT/1/period") == 0)
-  {
-    // Convert payload to integer for period value
-    String payloadStr = "";
-    for (int i = 0; i < length; i++) {
-      payloadStr += (char)payload[i];
-    }
-    period = payloadStr.toInt();
-  }
 }
 
 void getIPHomeCenter() {
@@ -57,7 +47,8 @@ void setup() {
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode(Led_Pin, OUTPUT);
-  bool res = wf.autoConnect("TM-NgocHung", "12345678");
+
+  bool res = wf.autoConnect("TM-NgocHung MQTT socket", "12345678");
   if (!res) {
     Serial.println("Failed to connect");
   } else {
@@ -84,7 +75,9 @@ void setup() {
       Serial.write(packet.data(), packet.length());
       Serial.println();
       if (!packet.isBroadcast() && !packet.isMulticast()) {
-        String a = String((char *)packet.data());
+        char p[11];
+        memcpy(&p, (char *)packet.data(), 11);
+        String a = String(p);
         if (a.equals(cmd)) {
           centralIP = packet.remoteIP();
           serverConnect = true;
@@ -95,7 +88,7 @@ void setup() {
       }
     });
   }
-  client.subscribe("IoT/sensor/1");
+  client.subscribe("home_socket");
   client.setServer(centralIP, 1883);
   client.setCallback(callback_period);
 }

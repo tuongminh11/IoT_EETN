@@ -2,7 +2,14 @@
 #include <WiFiManager.h>
 #include <PubSubClient.h>
 #include <ESPAsyncUDP.h>
+
 #define TRIGGER_PIN 23
+#define CONTEXT_PIN 2
+
+bool context = false;
+bool lastContext = false;
+unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -13,6 +20,7 @@ AsyncUDP udp;
 IPAddress centralIP;
 bool serverConnect = false;
 const String cmd = "BUSTER CALL";
+unsigned long lastLoop = 0;
 uint8_t period = 2;
 
 // Callback + change period
@@ -27,7 +35,7 @@ void callback_period(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
   // Update periodValue with received value
-  if (strcmp(topic, "ProjectIoT/1/period") == 0)
+  if (strcmp(topic, "home_sensor") == 0)
   {
     // Convert payload to integer for period value
     String payloadStr = "";
@@ -46,7 +54,9 @@ void getIPHomeCenter() {
 void setup() {
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
-  bool res = wf.autoConnect("TM-NgocHung", "12345678");
+  pinMode(CONTEXT_PIN, INPUT_PULLUP);
+
+  bool res = wf.autoConnect("TM-NgocHung MQTT sensor", "12345678");
   if (!res) {
     Serial.println("Failed to connect");
   } else {
@@ -73,7 +83,9 @@ void setup() {
       Serial.write(packet.data(), packet.length());
       Serial.println();
       if (!packet.isBroadcast() && !packet.isMulticast()) {
-        String a = String((char *)packet.data());
+        char p[11];
+        memcpy(&p, (char *)packet.data(), 11);
+        String a = String(p);
         if (a.equals(cmd)) {
           centralIP = packet.remoteIP();
           serverConnect = true;
@@ -84,7 +96,7 @@ void setup() {
       }
     });
   }
-  client.subscribe("IoT/sensor/1");
+  client.subscribe("home_sensor");
   client.setServer(centralIP, 1883);
   client.setCallback(callback_period);
 }
@@ -123,23 +135,34 @@ void checkButton() {
 }
 
 void loop() {
-  if (!serverConnect) {
-    getIPHomeCenter();
+  bool reading = digitalRead(CONTEXT_PIN);
+  if (!reading) {
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (!reading) {
+        if(lastContext != reading) context = !context;
+      }
+    }
   }
-  else {
-    DynamicJsonDocument doc(200);
-    uint8_t temp = random(0, 100);
-    uint8_t humi = random(0, 100);
-    doc[nameTag]["period"] = period;
-    doc[nameTag]["temprature"] = temp;
-    doc[nameTag]["humidity"] = humi;
-    Serial.print("Send : ");
-    String data;
-    serializeJson(doc, data);
-    Serial.println(data);
-    client.publish("ProjectIoT/1/sensor", data.c_str());
-    int delayValue = period * 1000;
-    delay(delayValue);
+  lastContext = reading;
+  if (millis() - lastLoop >= period * 1000) {
+    if (!serverConnect) {
+      getIPHomeCenter();
+    } else {
+      serverConnect = false;
+      DynamicJsonDocument doc(100);
+      uint8_t temp = random(10, 40);
+      uint8_t humi = random(0, 100);
+      if (context) temp = random(60, 100);
+      doc[nameTag]["period"] = period;
+      doc[nameTag]["temprature"] = temp;
+      doc[nameTag]["humidity"] = humi;
+      Serial.print("Send : ");
+      String data;
+      serializeJson(doc, data);
+      Serial.println(data);
+      client.publish("ProjectIoT/1/sensor", data.c_str());
+    }
+    lastLoop = millis();
   }
   client.loop();
   checkButton();
