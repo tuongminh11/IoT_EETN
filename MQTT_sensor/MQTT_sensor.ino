@@ -3,7 +3,7 @@
 #include <PubSubClient.h>
 #include <ESPAsyncUDP.h>
 
-#define TRIGGER_PIN 23
+#define TRIGGER_PIN 0
 #define CONTEXT_PIN 2
 
 bool context = false;
@@ -96,9 +96,7 @@ void setup() {
       }
     });
   }
-  client.subscribe("home_sensor");
-  client.setServer(centralIP, 1883);
-  client.setCallback(callback_period);
+
 }
 
 
@@ -134,12 +132,39 @@ void checkButton() {
   }
 }
 
+unsigned long lastConnectMQTTserver = 0;
+void reconnect() {
+  // try reconnected after 5 seconds
+  if (millis() - lastConnectMQTTserver >= 5000) {
+    if (!client.connected()) {
+      Serial.print("Attempting MQTT connection...");
+      // Create a random client ID
+      String clientId = "ESP8266Client-";
+      clientId += String(random(0xffff), HEX);
+      client.setServer(centralIP, 1883);
+      client.setCallback(callback_period);
+      // Attempt to connect
+      if (client.connect(clientId.c_str())) {
+        Serial.println("connected");
+        client.subscribe("home_sensor");
+      } else {
+        Serial.print("failed, rc=");
+        Serial.print(client.state());
+        Serial.println(" try again after 5 seconds");
+      }
+    }
+    lastConnectMQTTserver = millis();
+  }
+}
 void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
   bool reading = digitalRead(CONTEXT_PIN);
   if (!reading) {
     if ((millis() - lastDebounceTime) > debounceDelay) {
       if (!reading) {
-        if(lastContext != reading) context = !context;
+        if (lastContext != reading) context = !context;
       }
     }
   }
@@ -148,7 +173,6 @@ void loop() {
     if (!serverConnect) {
       getIPHomeCenter();
     } else {
-      serverConnect = false;
       DynamicJsonDocument doc(100);
       uint8_t temp = random(10, 40);
       uint8_t humi = random(0, 100);

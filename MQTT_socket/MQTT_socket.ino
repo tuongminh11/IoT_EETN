@@ -28,13 +28,15 @@ void callback_period(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
   // Control power pocket
-  if(payload[1]=='n')
+  if (payload[1] == 'n')
   {
-    digitalWrite(Led_Pin,HIGH);
+    Serial.println("ON"); 
+    digitalWrite(Led_Pin, HIGH);
   }
-  else if(payload[1]=='f')
+  else if (payload[1] == 'f')
   {
-    digitalWrite(Led_Pin,LOW);
+    Serial.println("OFF"); 
+    digitalWrite(Led_Pin, LOW);
   }
 }
 
@@ -126,7 +128,35 @@ void checkButton() {
   }
 }
 
+unsigned long lastConnectMQTTserver = 0;
+void reconnect() {
+  // try reconnected after 5 seconds
+  if (millis() - lastConnectMQTTserver >= 5000) {
+    if (!client.connected()) {
+      Serial.print("Attempting MQTT connection...");
+      // Create a random client ID
+      String clientId = "ESP8266Client-";
+      clientId += String(random(0xffff), HEX);
+      client.setServer(centralIP, 1883);
+      client.setCallback(callback_period);
+      // Attempt to connect
+      if (client.connect(clientId.c_str())) {
+        Serial.println("connected");
+        client.subscribe("home_socket");
+      } else {
+        Serial.print("failed, rc=");
+        Serial.print(client.state());
+        Serial.println(" try again after 5 seconds");
+      }
+    }
+    lastConnectMQTTserver = millis();
+  }
+}
+
 void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
   if (!serverConnect) {
     getIPHomeCenter();
   }

@@ -11,7 +11,7 @@
 #define TRIGGER_PIN 23
 
 const char *mqtt_server = "mqtt.thingsboard.cloud";  //Thingboards Platform
-const char *token = "5Q43jH2Yt2o6D2ztwFYd";          //ACCESS TOKEN
+const char *token = "ICzOXamZl4ZjWTuIdBHh";          //ACCESS TOKEN
 
 // CoAP client response callback
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
