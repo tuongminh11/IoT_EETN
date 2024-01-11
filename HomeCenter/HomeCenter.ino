@@ -33,6 +33,8 @@ int expiredMQTT = 5000;
 const char *cmd = "BUSTER CALL";
 const char *topicSuper = "v1/devices/me/telemetry";
 bool automation = false;
+bool coapAlarm = false;
+bool MQTTAlarm = false;
 
 // CoAP server endpoint URL
 void callback_sensor(CoapPacket &packet, IPAddress ip, int port) {
@@ -49,18 +51,20 @@ void callback_sensor(CoapPacket &packet, IPAddress ip, int port) {
     IPAddress ipDevice;
     StaticJsonDocument<100> buffer;
     deserializeJson(buffer, a);
-    if (buffer["temprature"] != "null") {
-      uint8_t temp = buffer["temprature"].as<uint8_t>();
-      if (temp > MAX_TEMP) {
-        //send to pump or switch
-        JsonObject documentRoot = listDevice.as<JsonObject>();
-        for (JsonPair keyValue : documentRoot) {
-          if ((listDevice[keyValue.key()]["P"].as<unsigned int>()) == 0) {
-            Serial.println(listDevice[keyValue.key()]["IP"].as<String>());
-            ipDevice.fromString(listDevice[keyValue.key()]["IP"].as<String>());
-            coap.put(ipDevice, 5683, "device", "0");
+    JsonObject documentRoot = listDevice.as<JsonObject>();
+    for (JsonPair keyValue : documentRoot) {
+      if ((listDevice[keyValue.key()]["P"].as<unsigned int>()) == 0) {
+        //Serial.println(listDevice[keyValue.key()]["IP"].as<String>());
+        ipDevice.fromString(listDevice[keyValue.key()]["IP"].as<String>());
+        if (buffer[keyValue.key()]["temprature"]) {
+          uint8_t temp = buffer[keyValue.key()]["temprature"].as<uint8_t>();
+          if (temp > MAX_TEMP) {
+            //send to pump or switch
+            coapAlarm = true;
           }
+          else coapAlarm = false;
         }
+        if (coapAlarm) coap.put(ipDevice, 5683, "control", "0");
       }
     }
   }
@@ -137,27 +141,27 @@ void reconnect() {
   }
 }
 
-void checkButton(){
+void checkButton() {
   // check for button press
   if ( digitalRead(TRIGGER_PIN) == LOW ) {
     // poor mans debounce/press-hold, code not ideal for production
     delay(50);
-    if( digitalRead(TRIGGER_PIN) == LOW ){
+    if ( digitalRead(TRIGGER_PIN) == LOW ) {
       Serial.println("Button Pressed");
       // still holding button for 3000 ms, reset settings, code not ideaa for production
       delay(3000); // reset delay hold
-      if( digitalRead(TRIGGER_PIN) == LOW ){
+      if ( digitalRead(TRIGGER_PIN) == LOW ) {
         Serial.println("Button Held");
         Serial.println("Erasing Config, restarting");
         wm.resetSettings();
         ESP.restart();
       }
-      
+
       // start portal w delay
       Serial.println("Starting config portal");
       wm.setConfigPortalTimeout(120);
-      
-      if (!wm.startConfigPortal("OnDemandAP","password")) {
+
+      if (!wm.startConfigPortal("OnDemandAP", "password")) {
         Serial.println("failed to connect or hit timeout");
         delay(3000);
         // ESP.restart();
@@ -221,25 +225,26 @@ void setup() {
   coap.start();
 
   //start local MQTT Broker
-  mqtt.subscribe("#", [](const char *topic, const char *payload) {+
+  mqtt.subscribe("#", [](const char *topic, const char *payload) {
     //handle Local MQTT
     Serial.printf("MQTT locol '%s': %s\n", topic, payload);
     String a = String(payload);
+
     if (automation) {
-      IPAddress ipDevice;
       StaticJsonDocument<100> buffer;
       deserializeJson(buffer, a);
-      if (buffer["temprature"] != "null") {
-        uint8_t temp = buffer["temprature"].as<uint8_t>();
-        if (temp > MAX_TEMP) {
-          JsonObject documentRoot = listDevice.as<JsonObject>();
-          for (JsonPair keyValue : documentRoot) {
-            if ((listDevice[keyValue.key()]["P"].as<unsigned int>()) == 1) {
-              Serial.println(listDevice[keyValue.key()]["IP"].as<String>());
-              ipDevice.fromString(listDevice[keyValue.key()]["IP"].as<String>());
-              mqtt.begin_publish(keyValue.key().c_str(), 0);
+      JsonObject documentRoot = listDevice.as<JsonObject>();
+      for (JsonPair keyValue : documentRoot) {
+        if ((listDevice[keyValue.key()]["P"].as<unsigned int>()) == 1) {
+          if (buffer[keyValue.key()]["temprature"]) {
+            uint8_t temp = buffer[keyValue.key()]["temprature"].as<uint8_t>();
+            if (temp > MAX_TEMP) {
+              //send to pump or switch
+              MQTTAlarm = true;
             }
+            else MQTTAlarm = false;
           }
+          if (MQTTAlarm) mqtt.publish(keyValue.key().c_str(), "0");
         }
       }
     }

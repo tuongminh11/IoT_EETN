@@ -42,7 +42,7 @@ void callback_period(char* topic, byte* payload, unsigned int length) {
     for (int i = 0; i < length; i++) {
       payloadStr += (char)payload[i];
     }
-    period = payloadStr.toInt();
+    if(payloadStr.toInt() != 0 )period = payloadStr.toInt();
   }
 }
 

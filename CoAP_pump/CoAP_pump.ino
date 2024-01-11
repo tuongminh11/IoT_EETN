@@ -34,22 +34,18 @@ void callback_control(CoapPacket &packet, IPAddress ip, int port) {
   String message = String((char *)&p);
   Serial.println(message);
   if (message.equals("0"))
-    PUMPSTATE = false;
-  else if (message.equals("1"))
     PUMPSTATE = true;
+  else if (message.equals("1"))
+    PUMPSTATE = false;
 
   if (PUMPSTATE) {
     digitalWrite(PUMP, HIGH);
     coap.sendResponse(ip, port, packet.messageid, "1");
-    Serial.println("ON");
-    char a[] = "{\"garden_pump\":{\"state\" : 1}}";
-    int rq = coap.send(centralIP, 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0, (uint8_t *)&a, sizeof(a));
+    Serial.println("OFF");
   } else {
     digitalWrite(PUMP, LOW);
     coap.sendResponse(ip, port, packet.messageid, "0");
-    char a[] = "{\"garden_pump\":{\"state\" : 0}}";
-    int rq = coap.send(centralIP, 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0, (uint8_t *)&a, sizeof(a));
-    Serial.println("OFF");
+    Serial.println("ON");
   }
 }
 
@@ -134,19 +130,19 @@ void checkButton() {
       if (!reading) {
         if (lastContext != reading)
         {
-          if (PUMPSTATE == 1)
+          if (!PUMPSTATE)
           {
             digitalWrite(PUMP, HIGH);
             Serial.println("OFF");
             doc[nameTag] = 0;
-            PUMPSTATE = 0;
+            PUMPSTATE = true;
           }
           else
           {
             digitalWrite(PUMP, LOW);
             Serial.println("ON");
             doc[nameTag] = 1;
-            PUMPSTATE = 1;
+            PUMPSTATE = false;
           }
           Serial.print("Send : ");
           String data;
