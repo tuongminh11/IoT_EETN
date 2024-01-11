@@ -10,11 +10,16 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 WiFiManager wf;
 String nameTag = "home_socket";
-
+int socket_state;
 AsyncUDP udp;
 IPAddress centralIP;
 bool serverConnect = false;
 const String cmd = "BUSTER CALL";
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+unsigned long timedelay;
+bool context = false;
+bool lastContext = false;
 
 // Callback
 void callback_period(char* topic, byte* payload, unsigned int length) {
@@ -28,15 +33,17 @@ void callback_period(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println();
   // Control power pocket
-  if (payload[1] == 'n')
+  if (payload[0] == '1')
   {
-    Serial.println("ON"); 
-    digitalWrite(Led_Pin, HIGH);
-  }
-  else if (payload[1] == 'f')
-  {
-    Serial.println("OFF"); 
+    Serial.println("ON");
     digitalWrite(Led_Pin, LOW);
+    socket_state = 1;
+  }
+  else if (payload[0] == '0')
+  {
+    Serial.println("OFF");
+    digitalWrite(Led_Pin, HIGH);
+    socket_state = 0;
   }
 }
 
@@ -48,7 +55,6 @@ void getIPHomeCenter() {
 void setup() {
   Serial.begin(115200);
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
-  pinMode(Led_Pin, OUTPUT);
 
   bool res = wf.autoConnect("TM-NgocHung MQTT socket", "12345678");
   if (!res) {
@@ -90,43 +96,63 @@ void setup() {
       }
     });
   }
+  pinMode(Led_Pin, OUTPUT);
+  digitalWrite(Led_Pin, HIGH);
+  socket_state = 0;
   client.subscribe("home_socket");
-  client.setServer(centralIP, 1883);
   client.setCallback(callback_period);
 }
-
-
 void checkButton() {
-  // check for button press
-  if (digitalRead(TRIGGER_PIN) == LOW) {
-    // poor mans debounce/press-hold, code not ideal for production
-    delay(50);
-    if (digitalRead(TRIGGER_PIN) == LOW) {
-      Serial.println("Button Pressed");
-      // still holding button for 3000 ms, reset settings, code not ideaa for production
-      delay(3000);  // reset delay hold
-      if (digitalRead(TRIGGER_PIN) == LOW) {
+  bool reading = digitalRead(TRIGGER_PIN);
+  DynamicJsonDocument doc(100);
+  if (!reading) {
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (!reading) {
+        if (lastContext != reading)
+        {
+          if (socket_state == 1)
+          {
+            digitalWrite(Led_Pin, HIGH);
+            Serial.println("OFF");
+            doc[nameTag] = 0;
+            socket_state = 0;
+          }
+          else
+          {
+            digitalWrite(Led_Pin, LOW);
+            Serial.println("ON");
+            doc[nameTag] = 1;
+            socket_state = 1;
+          }
+          Serial.print("Send : ");
+          String data;
+          serializeJson(doc, data);
+          Serial.println(data);
+          client.publish("ProjectIoT/1/sensor", data.c_str());
+        }
+      }
+      lastContext = reading;
+    }
+
+    if (millis() - timedelay > 3000) {
+      if (!reading)
+      {
         Serial.println("Button Held");
         Serial.println("Erasing Config, restarting");
         wf.resetSettings();
         ESP.restart();
       }
-
-      // start portal w delay
-      Serial.println("Starting config portal");
-      wf.setConfigPortalTimeout(120);
-
-      if (!wf.startConfigPortal("OnDemandAP", "password")) {
-        Serial.println("failed to connect or hit timeout");
-        delay(3000);
-        ESP.restart();
-      } else {
-        //if you get here you have connected to the WiFi
-        Serial.println("connected...yeey :)");
-      }
     }
+
   }
+  else {
+    lastDebounceTime = millis();
+    timedelay = millis();
+    lastContext = reading;
+  }
+  
 }
+
 
 unsigned long lastConnectMQTTserver = 0;
 void reconnect() {
@@ -138,7 +164,6 @@ void reconnect() {
       String clientId = "ESP8266Client-";
       clientId += String(random(0xffff), HEX);
       client.setServer(centralIP, 1883);
-      client.setCallback(callback_period);
       // Attempt to connect
       if (client.connect(clientId.c_str())) {
         Serial.println("connected");
@@ -152,13 +177,16 @@ void reconnect() {
     lastConnectMQTTserver = millis();
   }
 }
-
+unsigned long lastLoop = 0;
 void loop() {
   if (!client.connected()) {
     reconnect();
   }
   if (!serverConnect) {
-    getIPHomeCenter();
+    if (millis() - lastLoop >= 2000) {
+      getIPHomeCenter();
+      lastLoop = millis();
+    }
   }
   client.loop();
   checkButton();

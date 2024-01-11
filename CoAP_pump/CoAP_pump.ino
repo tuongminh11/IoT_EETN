@@ -2,16 +2,15 @@
 #include <WiFiUdp.h>
 #include <coap-simple.h>
 #include "ESPAsyncUDP.h"
-
+#include <ArduinoJson.h>
 #define PUMP 2
 #define TRIGGER_PIN 0
-
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_control(CoapPacket &packet, IPAddress ip, int port);
 
 WiFiManager wm;
 String nameTag = "garden_pump";
-
+DynamicJsonDocument doc(100);
 WiFiUDP Udp;
 Coap coap(Udp);
 AsyncUDP udp;
@@ -22,6 +21,11 @@ bool PUMPSTATE;
 unsigned long lastLoop = 0;
 bool serverConnect = false;
 String cmd = "BUSTER CALL";
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+unsigned long timedelay;
+bool context = false;
+bool lastContext = false;
 
 void callback_control(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p[packet.payloadlen + 1];
@@ -123,36 +127,58 @@ void setup() {
 }
 
 void checkButton() {
-  // check for button press
-  if (digitalRead(TRIGGER_PIN) == LOW) {
-    // poor mans debounce/press-hold, code not ideal for production
-    delay(50);
-    if (digitalRead(TRIGGER_PIN) == LOW) {
-      Serial.println("Button Pressed");
-      // still holding button for 3000 ms, reset settings, code not ideaa for production
-      delay(3000);  // reset delay hold
-      if (digitalRead(TRIGGER_PIN) == LOW) {
+  bool reading = digitalRead(TRIGGER_PIN);
+  DynamicJsonDocument doc(100);
+  if (!reading) {
+    if ((millis() - lastDebounceTime) > debounceDelay) {
+      if (!reading) {
+        if (lastContext != reading)
+        {
+          if (PUMPSTATE == 1)
+          {
+            digitalWrite(PUMP, HIGH);
+            Serial.println("OFF");
+            doc[nameTag] = 0;
+            PUMPSTATE = 0;
+          }
+          else
+          {
+            digitalWrite(PUMP, LOW);
+            Serial.println("ON");
+            doc[nameTag] = 1;
+            PUMPSTATE = 1;
+          }
+          Serial.print("Send : ");
+          String data;
+          serializeJson(doc, data);
+          char a[data.length() + 1];
+          data.toCharArray(a, data.length() + 1);
+          Serial.println(data);
+          int rq = coap.send(centralIP, 5683, "sensor", COAP_CON, COAP_PUT, NULL, 0, (uint8_t *)&a, sizeof(a));
+        }
+      }
+      lastContext = reading;
+    }
+
+    if (millis() - timedelay > 3000) {
+      if (!reading)
+      {
         Serial.println("Button Held");
         Serial.println("Erasing Config, restarting");
         wm.resetSettings();
         ESP.restart();
       }
-
-      // start portal w delay
-      Serial.println("Starting config portal");
-      wm.setConfigPortalTimeout(120);
-
-      if (!wm.startConfigPortal("OnDemandAP", "password")) {
-        Serial.println("failed to connect or hit timeout");
-        delay(3000);
-        // ESP.restart();
-      } else {
-        //if you get here you have connected to the WiFi
-        Serial.println("connected...yeey :)");
-      }
     }
+
   }
+  else {
+    lastDebounceTime = millis();
+    timedelay = millis();
+    lastContext = reading;
+  }
+
 }
+
 
 void loop() {
   if (!serverConnect) {
