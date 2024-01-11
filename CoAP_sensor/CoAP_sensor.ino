@@ -160,9 +160,13 @@ void loop() {
       if (!reading) {
         if(lastContext != reading) context = !context;
       }
+      lastContext = reading;
     }
   }
-  lastContext = reading;
+  else {
+    lastDebounceTime = millis();
+    lastContext = reading;
+  }
   if (millis() - lastLoop >= period * 1000) {
     if (!serverConnect) {
       getIPHomeCenter();
