@@ -43,7 +43,7 @@
             },
         }
         ```
-    * Send Unicast UDP PDU to remoteIP to service Home Center IP with key data.
+    * Send Unicast UDP PDU with key data to remoteIP to service Home Center IP.
 * Logic CoAP
     * Service Endpoint "sensor" 
     * Callback "sensor" :
@@ -72,3 +72,76 @@
             {"method":"$device's name", "params": $data type Int or Float}
             ```
         * Use data in field method to get device's name and protocol, after that send data to this device.
+
+### 2. CoAP sensor
+
+* Auto get Home Center IP
+    * Send UDP broadcast with data "$name_device/$type_protocol"
+    * Handle unicast and verify data. If key data is right, save IP Home Center to cache.
+
+* Get data from Thingsboard to change period
+* Loop
+    * If connected to Home Center, send data contribute period, temprature and humidity. Else continue send UDP broadcast to find Home Center.
+    Eg:
+        ```json
+        {
+            "$name_device" : {
+                "period": $number,
+                "temprature": %number,
+                "humidity": %number
+            }
+        }
+        ```
+    * check digital state GPIO 0 to reset config wifi
+    * check digital state GPIO 2 if change (from HIGH to LOW) to set context:
+        * Common temprature
+        * High temprature (>60 C)
+    
+### 3. CoAP pump
+
+* Auto get Home Center IP
+    * Send UDP broadcast with data "$name_device/$type_protocol"
+    * Handle unicast and verify data. If key data is right, save IP Home Center to cache.
+* Get data from Thingsboard to control LED
+* Loop
+    * If not connected Home Center continue send UDP broadcast to find Home Center.
+    * output digital state GPIO 2 to control LED.
+    * check digital state GPIO 0 if change (from HIGH to LOW) to control LED. If long press 3s then reset config wifi.
+
+### 4. MQTT sensor
+
+* Auto get Home Center IP
+    * Send UDP broadcast with data "$name_device/$type_protocol"
+    * Handle unicast and verify data. If key data is right, save IP Home Center to cache.
+
+* Get data from Thingsboard to change period
+* Reconnect MQTT broker if disconnected
+* Loop
+    * If connected to Home Center, send data contribute period, temprature and humidity. Else continue send UDP broadcast to find Home Center.
+    Eg:
+        ```json
+        {
+            "$name_device" : {
+                "period": $number,
+                "temprature": %number,
+                "humidity": %number
+            }
+        }
+        ```
+    * check digital state GPIO 0 to reset config wifi
+    * check digital state GPIO 2 if change (from HIGH to LOW) to set context:
+        * Common temprature
+        * High temprature (>60 C)
+    
+### 5. MQTT socket
+
+* Auto get Home Center IP
+    * Send UDP broadcast with data "$name_device/$type_protocol"
+    * Handle unicast and verify data. If key data is right, save IP Home Center to cache.
+
+* Get data from Thingsboard to control LED
+* Reconnect MQTT broker if disconnected
+* Loop
+    * If not connected Home Center continue send UDP broadcast to find Home Center.
+    * output digital state GPIO 2 to control LED.
+    * check digital state GPIO 0 if change (from HIGH to LOW) to control LED. If long press 3s then reset config wifi.

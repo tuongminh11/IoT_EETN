@@ -3,8 +3,10 @@
 #include <coap-simple.h>
 #include "ESPAsyncUDP.h"
 #include <ArduinoJson.h>
+
 #define PUMP 2
 #define TRIGGER_PIN 0
+
 void callback_response(CoapPacket &packet, IPAddress ip, int port);
 void callback_control(CoapPacket &packet, IPAddress ip, int port);
 
@@ -27,6 +29,7 @@ unsigned long timedelay;
 bool context = false;
 bool lastContext = false;
 
+//xử lý dữ liệu CoAP từ Home Center
 void callback_control(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p[packet.payloadlen + 1];
   memcpy(p, packet.payload, packet.payloadlen);
@@ -49,7 +52,7 @@ void callback_control(CoapPacket &packet, IPAddress ip, int port) {
   }
 }
 
-// CoAP client response callback
+// xử lý dữ liệu phản hồi từ server CoAP
 void callback_response(CoapPacket &packet, IPAddress ip, int port) {
   Serial.println("[Coap Response got]");
   uint8_t p;
@@ -57,6 +60,7 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
   Serial.println(p);
 }
 
+//gửi tập tin UDP broadcast
 void getIPHomeCenter() {
   Serial.println("Connect to Home Center");
   String msg = nameTag + "/0";
@@ -74,6 +78,7 @@ void setup() {
     Serial.println("connected...yeey :)");
   }
 
+  //xử lý tập tin UDP
   if (udp.listen(1234)) {
     Serial.print("UDP Listening on IP: ");
     Serial.println(WiFi.localIP());
@@ -122,6 +127,7 @@ void setup() {
   coap.start();
 }
 
+//xử lý nút bấm thay đổi trạng thái led và setup wifi
 void checkButton() {
   bool reading = digitalRead(TRIGGER_PIN);
   DynamicJsonDocument doc(100);

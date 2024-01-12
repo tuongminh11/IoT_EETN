@@ -69,7 +69,7 @@ void callback_sensor(CoapPacket &packet, IPAddress ip, int port) {
     }
   }
 
-  //publish to platform => need fix
+  //publish to platform
   client.publish(topicSuper, (char *)&p);
 }
 

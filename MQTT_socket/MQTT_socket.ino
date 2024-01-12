@@ -62,6 +62,8 @@ void setup() {
   } else {
     Serial.println("connected...yay :)");
   }
+
+  //xử lý tập tin UDP
   if (udp.listen(1234)) {
     Serial.print("UDP Listening on IP: ");
     Serial.println(WiFi.localIP());
@@ -102,6 +104,8 @@ void setup() {
   client.subscribe("home_socket");
   client.setCallback(callback_period);
 }
+
+//xử lý nút bấm thay đổi trạng thái led và setup wifi
 void checkButton() {
   bool reading = digitalRead(TRIGGER_PIN);
   DynamicJsonDocument doc(100);
@@ -155,6 +159,8 @@ void checkButton() {
 
 
 unsigned long lastConnectMQTTserver = 0;
+
+//kết nối lại MQTT broker
 void reconnect() {
   // try reconnected after 5 seconds
   if (millis() - lastConnectMQTTserver >= 5000) {

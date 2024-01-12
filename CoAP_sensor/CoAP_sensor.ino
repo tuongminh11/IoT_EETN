@@ -30,6 +30,7 @@ bool serverConnect = false;
 const String cmd = "BUSTER CALL";
 unsigned long lastLoop = 0;
 
+//xử lý dữ liệu CoAP từ Home Center
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
   uint8_t p[packet.payloadlen + 1];
   memcpy(p, packet.payload, packet.payloadlen);
@@ -42,7 +43,7 @@ void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
   } else coap.sendResponse(ip, port, packet.messageid, "invalid period");
 }
 
-// CoAP client response callback
+// xử lý dữ liệu phản hồi từ server CoAP
 void callback_response(CoapPacket &packet, IPAddress ip, int port) {
   Serial.println("[Coap Response got]");
   uint8_t p;
@@ -51,6 +52,7 @@ void callback_response(CoapPacket &packet, IPAddress ip, int port) {
   serverConnect = true;
 }
 
+//gửi tập tin UDP broadcast
 void getIPHomeCenter() {
   Serial.println("Connect to Home Center");
   String msg = nameTag + "/0";
@@ -70,6 +72,7 @@ void setup() {
     Serial.println("connected...yeey :)");
   }
 
+  //xử lý tập tin UDP
   if (udp.listen(1234)) {
     Serial.print("UDP Listening on IP: ");
     Serial.println(WiFi.localIP());
@@ -121,6 +124,7 @@ void setup() {
   coap.start();
 }
 
+//kiểm tra nút bấm để reset wifi config
 void checkButton() {
   // check for button press
   if (digitalRead(TRIGGER_PIN) == LOW) {
@@ -155,6 +159,8 @@ void checkButton() {
 
 void loop() {
   bool reading = digitalRead(CONTEXT_PIN);
+
+  //thay đổi kịch bản nhiệt độ
   if (!reading) {
     if ((millis() - lastDebounceTime) > debounceDelay) {
       if (!reading) {
@@ -167,6 +173,8 @@ void loop() {
     lastDebounceTime = millis();
     lastContext = reading;
   }
+
+  //gửi dữ liệu theo chu kỳ
   if (millis() - lastLoop >= period * 1000) {
     if (!serverConnect) {
       getIPHomeCenter();
