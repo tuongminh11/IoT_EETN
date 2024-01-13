@@ -30,49 +30,95 @@ bool serverConnect = false;
 const String cmd = "BUSTER CALL";
 unsigned long lastLoop = 0;
 
-//xử lý dữ liệu CoAP từ Home Center
+// Process CoAP data from Home Center
 void callback_periodSensor(CoapPacket &packet, IPAddress ip, int port) {
+  // Copy packet payload to a temporary buffer
   uint8_t p[packet.payloadlen + 1];
   memcpy(p, packet.payload, packet.payloadlen);
   p[packet.payloadlen] = NULL;
+
+  // Convert the payload buffer to a string
   String message = String((char *)&p);
+
+  // Print the message to the serial monitor
   Serial.println(message);
+
+  // Check if the payload can be converted to a valid floating-point number
   if (atof((char *)&p) > 0) {
+    // Convert the payload to a floating-point number and update the 'period' variable
     period = atof((char *)&p);
+
+    // Send a success response back to the client
     coap.sendResponse(ip, port, packet.messageid, "change period successfully");
-  } else coap.sendResponse(ip, port, packet.messageid, "invalid period");
+  } else {
+    // Send an error response back to the client
+    coap.sendResponse(ip, port, packet.messageid, "invalid period");
+  }
 }
 
-// xử lý dữ liệu phản hồi từ server CoAP
+/**
+ * Handle CoAP response data from the server.
+ * 
+ * @param packet - The CoapPacket object containing the response data.
+ * @param ip - The IP address of the server.
+ * @param port - The port number of the server.
+ */
 void callback_response(CoapPacket &packet, IPAddress ip, int port) {
+  // Print debug message
   Serial.println("[Coap Response got]");
+
+  // Extract payload data
   uint8_t p;
   memcpy(&p, packet.payload, packet.payloadlen);
+
+  // Print payload data
   Serial.println(p);
+
+  // Set server connection flag
   serverConnect = true;
 }
 
-//gửi tập tin UDP broadcast
+// Send UDP broadcast file
 void getIPHomeCenter() {
+  // Print message to serial console
   Serial.println("Connect to Home Center");
+
+  // Create message string
   String msg = nameTag + "/0";
+
+  // Broadcast message using UDP
   udp.broadcast(msg.c_str());
 }
 
+/**
+ * Set up the system.
+ * - Configure WiFi mode.
+ * - Initialize serial communication.
+ * - Set pin modes.
+ * - Connect to WiFi.
+ * - Set up UDP listener.
+ * - Start CoAP server.
+ */
 void setup() {
+  // Configure WiFi mode
   WiFi.mode(WIFI_STA);
+
+  // Initialize serial communication
   Serial.begin(115200);
+
+  // Set pin modes
   pinMode(TRIGGER_PIN, INPUT_PULLUP);
   pinMode(CONTEXT_PIN, INPUT_PULLUP);
 
+  // Connect to WiFi
   bool res = wm.autoConnect("TM-NgocHung CoAP sensor", "12345678");
   if (!res) {
     Serial.println("Failed to connect");
   } else {
-    Serial.println("connected...yeey :)");
+    Serial.println("Connected... yeey :)");
   }
 
-  //xử lý tập tin UDP
+  // Set up UDP listener
   if (udp.listen(1234)) {
     Serial.print("UDP Listening on IP: ");
     Serial.println(WiFi.localIP());
@@ -101,39 +147,41 @@ void setup() {
           if (a.equals(cmd)) {
             centralIP = packet.remoteIP();
             serverConnect = true;
-            Serial.println("connected to server");
+            Serial.println("Connected to server");
             Serial.println(centralIP);
             udp.close();
           }
           else {
             Serial.println(String((char *)packet.data()));
-            Serial.println("code not match");
+            Serial.println("Code does not match");
           }
         }
       }
     });
   }
 
+  // Start CoAP server
   coap.server(callback_periodSensor, "control");
-  // client response callback.
-  // this endpoint is single callback.
 
+  // Set client response callback
   coap.response(callback_response);
 
-  // start coap server/client
+  // Start CoAP server/client
   coap.start();
 }
 
-//kiểm tra nút bấm để reset wifi config
+/**
+ * Check the button to reset the WiFi configuration.
+ */
 void checkButton() {
-  // check for button press
+  // Check for button press
   if (digitalRead(TRIGGER_PIN) == LOW) {
-    // poor mans debounce/press-hold, code not ideal for production
+    // Poor man's debounce/press-hold, code not ideal for production
     delay(50);
     if (digitalRead(TRIGGER_PIN) == LOW) {
       Serial.println("Button Pressed");
-      // still holding button for 3000 ms, reset settings, code not ideaa for production
-      delay(3000);  // reset delay hold
+      // Still holding button for 3000 ms, reset settings, code not ideal for production
+      delay(3000);  // Reset delay hold
       if (digitalRead(TRIGGER_PIN) == LOW) {
         Serial.println("Button Held");
         Serial.println("Erasing Config, restarting");
@@ -141,17 +189,17 @@ void checkButton() {
         ESP.restart();
       }
 
-      // start portal w delay
+      // Start portal with delay
       Serial.println("Starting config portal");
       wm.setConfigPortalTimeout(120);
 
       if (!wm.startConfigPortal("OnDemandAP", "password")) {
-        Serial.println("failed to connect or hit timeout");
+        Serial.println("Failed to connect or hit timeout");
         delay(3000);
         // ESP.restart();
       } else {
-        //if you get here you have connected to the WiFi
-        Serial.println("connected...yeey :)");
+        // If you get here you have connected to the WiFi
+        Serial.println("Connected...yeey :)");
       }
     }
   }
@@ -160,7 +208,7 @@ void checkButton() {
 void loop() {
   bool reading = digitalRead(CONTEXT_PIN);
 
-  //thay đổi kịch bản nhiệt độ
+  // Change temperature scenario
   if (!reading) {
     if ((millis() - lastDebounceTime) > debounceDelay) {
       if (!reading) {
@@ -174,7 +222,7 @@ void loop() {
     lastContext = reading;
   }
 
-  //gửi dữ liệu theo chu kỳ
+  // Send data periodically
   if (millis() - lastLoop >= period * 1000) {
     if (!serverConnect) {
       getIPHomeCenter();
@@ -185,7 +233,7 @@ void loop() {
       uint8_t humi = random(0, 100);
       if (context) temp = random(60, 100);
       doc[nameTag]["period"] = period;
-      doc[nameTag]["temprature"] = temp;
+      doc[nameTag]["temperature"] = temp;
       doc[nameTag]["humidity"] = humi;
       Serial.print("Send : ");
       String data;
