@@ -7,9 +7,9 @@
 #include <PicoMQTT.h>
 #include "AsyncUDP.h"
 
-int MAX_TEMP = 60
-#define TRIGGER_PIN 23
 
+#define TRIGGER_PIN 23
+int MAX_TEMP = 60;
 const char *mqtt_server = "mqtt.thingsboard.cloud";  //Thingboards Platform
 const char *token = "ICzOXamZl4ZjWTuIdBHh";          //ACCESS TOKEN
 
@@ -103,7 +103,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
   Serial.println(sig);
   serializeJson(command, Serial);
   if (id.equals("home_center")) {
-    MAX_TEMP = command["params"].as<Int>();
+    MAX_TEMP = command["params"].as<signed int>();
   }
   else {
 
