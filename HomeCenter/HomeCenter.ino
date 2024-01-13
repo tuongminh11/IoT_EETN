@@ -7,7 +7,7 @@
 #include <PicoMQTT.h>
 #include "AsyncUDP.h"
 
-#define MAX_TEMP 60
+int MAX_TEMP = 60
 #define TRIGGER_PIN 23
 
 const char *mqtt_server = "mqtt.thingsboard.cloud";  //Thingboards Platform
@@ -102,16 +102,22 @@ void callback(char *topic, byte *payload, unsigned int length) {
   String id = command["method"].as<String>();
   Serial.println(sig);
   serializeJson(command, Serial);
-  JsonObject documentRoot = listDevice.as<JsonObject>();
-  for (JsonPair keyValue : documentRoot) {
-    if (id.equals(keyValue.key().c_str())) {
-      IPAddress ipDevice;
-      unsigned int protocol = listDevice[keyValue.key()]["P"].as<unsigned int>();
-      ipDevice.fromString(listDevice[keyValue.key()]["IP"].as<String>());
-      if (protocol == 0) {
-        coap.put(ipDevice, 5683, "control", sig.c_str());
-      } else if (protocol == 1) {
-        mqtt.publish(keyValue.key().c_str(), sig);
+  if (id.equals("home_center")) {
+    MAX_TEMP = command["params"].as<Int>();
+  }
+  else {
+
+    JsonObject documentRoot = listDevice.as<JsonObject>();
+    for (JsonPair keyValue : documentRoot) {
+      if (id.equals(keyValue.key().c_str())) {
+        IPAddress ipDevice;
+        unsigned int protocol = listDevice[keyValue.key()]["P"].as<unsigned int>();
+        ipDevice.fromString(listDevice[keyValue.key()]["IP"].as<String>());
+        if (protocol == 0) {
+          coap.put(ipDevice, 5683, "control", sig.c_str());
+        } else if (protocol == 1) {
+          mqtt.publish(keyValue.key().c_str(), sig);
+        }
       }
     }
   }
